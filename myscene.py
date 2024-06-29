@@ -1,4 +1,5 @@
 import logging
+import pprint
 from dataclasses import dataclass
 from typing import Any
 
@@ -102,6 +103,12 @@ class CommonInfoScene(Scene, state='coms'):
             logger.error('Невозможное событие! Переданные в функцию данные не удалось определить!')
             return None
 
+    async def del_auto_msg(self, message: str, data: dict, bot: Bot, chat_id, msg_sig: str = 'automsg') -> dict:
+        if msg_id := data.get(msg_sig, None):
+            await bot.edit_message_text(message, chat_id=chat_id, message_id=msg_id, reply_markup=None)
+            del data[msg_sig]
+        return data
+
     @on.callback_query.enter()
     @on.message.enter()
     async def on_msg_enter(self, data, bot: Bot, state: FSMContext, step: int | None = 0) -> Any:
@@ -171,19 +178,18 @@ class CommonInfoScene(Scene, state='coms'):
             logger.info(f"Userdata from {user_id} was handled by {self.__class__.__name__} with {data_st.get('init_data')} query and successfully saved.")
         else:
             logger.warning(f"Userdata from {user_id} was handled by {self.__class__.__name__} with {data_st.get('init_data')} query, but not saved!")
-        if msg := data_st.get('automsg'):
-            await bot.edit_message_text('Отменено.', chat_id=chat_id, message_id=msg, reply_markup=None)
+
+        await self.del_auto_msg('Отменено.', data_st, bot, chat_id)
         await self.exit_msg(message, state)
+
         await state.set_data({})
 
     @on.message(F.text == "🔙 Back")
     async def back(self, message: types.Message, bot: Bot, state: FSMContext) -> None:
         data = await state.get_data()
         step = data["step"]
-        if msg := data.get('automsg'):
-            await bot.edit_message_text('Отменено.', chat_id=message.chat.id, message_id=msg, reply_markup=None)
-            del data['automsg']
-            await state.set_data(data)
+        data = await self.del_auto_msg('Отменено.', data, bot, message.chat.id)
+        await state.set_data(data)
         previous_step = step - 1
         if previous_step < 0:
             return await self.wizard.exit()
@@ -212,10 +218,9 @@ class CommonInfoScene(Scene, state='coms'):
                 await self.show_presets_msg(msg.chat.id, self.work_data[step].presets, bot, state)
             return
 
-        if automsg := data.get('automsg', None):
-            await bot.edit_message_text('Выбрано:', chat_id=msg.chat.id, message_id=automsg, reply_markup=None)
-            del data['automsg']
-            await state.set_data(data)
+        data = await self.del_auto_msg('Выбрано:', data, bot, msg.chat.id)
+        await state.set_data(data)
+
         await self.wizard.retake(step=step + 1)
 
     @on.message(F.text == "🚫 Exit")
@@ -237,10 +242,8 @@ class CommonInfoScene(Scene, state='coms'):
             return
         answers = data.get("answers", {})
         answers[step] = message.text
-        if automsg := data.get('automsg', None):
-            await bot.edit_message_text('Выбрано:', chat_id=message.chat.id, message_id=automsg, reply_markup=None)
-            del data['automsg']
-            await state.set_data(data)
+        data = await self.del_auto_msg('Выбрано:', data, bot, message.chat.id)
+        await state.set_data(data)
 
         await state.update_data(answers=answers)
         await self.wizard.retake(step=step + 1)
@@ -253,10 +256,8 @@ class CommonInfoScene(Scene, state='coms'):
         answers = data.get("answers", {})
         value = Preloads(pk=value_id, data=self.work_data[step].presets[value_id])
         answers[step] = value.data
-        if automsg := data.get('automsg', None):
-            await bot.edit_message_text('Выбрано:', chat_id=cbk.message.chat.id, message_id=automsg, reply_markup=None)
-            del data['automsg']
-            await state.set_data(data)
+        data = await self.del_auto_msg('Выбрано:', data, bot, cbk.message.chat.id)
+        await state.set_data(data)
 
         await state.update_data(answers=answers)
         await cbk.message.answer(value.data)
