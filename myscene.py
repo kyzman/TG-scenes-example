@@ -1,5 +1,4 @@
 import logging
-import pprint
 from dataclasses import dataclass
 from typing import Any
 
@@ -77,10 +76,11 @@ class CommonInfoScene(Scene, state='coms'):
         else:
             try:
                 doc_type = int(list(kwargs['wizard'].state.storage.storage.values())[0].data.get(
-                    'init_data', '0').removeprefix('menu_select_'))
+                    'init_data').removeprefix('menu_select_'))
             except Exception as e:
                 # обычно происходит когда пользователь вызывает сцену, когда уже активна другая сцена.
-                logger.error(f'Некорректный тип данных инициализации сцены {self.__class__.__name__}! {e}')
+                logger.error(f"Пользователь %r вызвал некорректный тип данных инициализации сцены %r! %r",
+                             kwargs['wizard'].data.get('event_from_user').id, self.__class__.__name__, e)
                 raise
         self.work_data = QUESTIONS[doc_type-1]
         Scene.__init__(self, *args, **kwargs)
@@ -175,9 +175,11 @@ class CommonInfoScene(Scene, state='coms'):
         )
         await bot.send_message(chat_id, **content.as_kwargs(), reply_markup=ReplyKeyboardRemove())
         if await self.save_user_data(user_id, final_data, data_st):
-            logger.info(f"Userdata from {user_id} was handled by {self.__class__.__name__} with {data_st.get('init_data')} query and successfully saved.")
+            logger.info(f"Userdata from %r was handled by %r with %r query and successfully saved.",
+                        user_id, self.__class__.__name__, data_st.get('init_data'))
         else:
-            logger.warning(f"Userdata from {user_id} was handled by {self.__class__.__name__} with {data_st.get('init_data')} query, but not saved!")
+            logger.warning(f"Userdata from %r was handled by %r with %r query, but not saved!",
+                           user_id, self.__class__.__name__, data_st.get('init_data'))
 
         await self.del_auto_msg('Отменено.', data_st, bot, chat_id)
         await self.exit_msg(message, state)
@@ -212,8 +214,7 @@ class CommonInfoScene(Scene, state='coms'):
                 try:
                     await bot.edit_message_reply_markup(chat_id=msg.chat.id, message_id=automsg, reply_markup=None)
                 except Exception as e:
-                    logger.warning(f"Can't edit msg! {e}")
-                del data['automsg']
+                    logger.warning(f"Can't edit msg! %r", e)
                 await msg.answer('Данный шаг нельзя пропустить!')
                 await self.show_presets_msg(msg.chat.id, self.work_data[step].presets, bot, state)
             return
@@ -236,8 +237,7 @@ class CommonInfoScene(Scene, state='coms'):
                 try:
                     await bot.edit_message_reply_markup(chat_id=message.chat.id, message_id=automsg, reply_markup=None)
                 except Exception as e:
-                    logger.warning(f"Can't edit msg! {e}")
-                del data['automsg']
+                    logger.warning(f"Can't edit msg! %r", e)
                 await self.show_presets_msg(message.chat.id, self.work_data[step].presets, bot, state)
             return
         answers = data.get("answers", {})
